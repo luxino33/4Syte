@@ -7,7 +7,9 @@ const nextConfig: NextConfig = {
   // Tell webpack/turbopack not to bundle native Node.js modules
   serverExternalPackages: [
     "@prisma/client",
+    "@prisma/adapter-pg",
     "prisma",
+    "pg",
     "bcryptjs",
     "@anthropic-ai/sdk",
     "nodemailer",
