@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Keep native Node modules out of the client bundle
+  // Standalone output creates a self-contained server at
+  // .next/standalone/server.js — required for Hostinger Node.js hosting
+  output: "standalone",
+
   serverExternalPackages: [
     "bcryptjs",
     "@anthropic-ai/sdk",
