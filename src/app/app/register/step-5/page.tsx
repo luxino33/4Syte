@@ -1,23 +1,35 @@
 "use client";
+
 import { useRouter } from "next/navigation";
 import { Stepper } from "@/components/wizard/stepper";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Construction } from "lucide-react";
+import { Step5Form } from "@/components/wizard/step5-form";
+
+function getStorage(key: string) { return typeof window !== "undefined" ? localStorage.getItem(key) ?? "" : ""; }
+
 export default function Step5Page() {
   const router = useRouter();
+
+  async function handleNext(_docs: Record<string, unknown>, agreements: { type: string; version: string; accepted: boolean }[]) {
+    const supplierId = getStorage("4syte_supplier_id");
+    const res = await fetch("/api/register/step-5", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ supplierId, agreements }),
+    });
+    if (!res.ok) { const j = await res.json(); throw new Error(j.error ?? "Failed"); }
+    router.push("/app/register/step-6");
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-[var(--border)] p-6">
         <Stepper currentStep={5} completedSteps={[1, 2, 3, 4]} />
       </div>
-      <div className="bg-white rounded-xl shadow-sm border border-[var(--border)] p-8 flex flex-col items-center gap-4 text-center">
-        <Construction className="h-10 w-10 text-[var(--primary)]" />
-        <h1 className="text-xl font-bold">Step 5 — Supporting Documents &amp; Agreements</h1>
-        <p className="text-sm text-[var(--muted-foreground)] max-w-sm">This step is under construction and will be available shortly.</p>
-        <div className="flex gap-3 mt-2">
-          <Button variant="outline" onClick={() => router.push("/app/register/step-4")}><ArrowLeft className="h-4 w-4" /> Back</Button>
-          <Button onClick={() => router.push("/app/register/step-6")}>Next <ArrowRight className="h-4 w-4" /></Button>
+      <div className="bg-white rounded-xl shadow-sm border border-[var(--border)] p-6 md:p-8">
+        <div className="mb-6">
+          <h1 className="text-xl font-bold">Step 5 — Supporting Documents &amp; Agreements</h1>
+          <p className="text-sm text-[var(--muted-foreground)] mt-1">Upload required documents and accept the agreements to continue.</p>
         </div>
+        <Step5Form onNext={handleNext} onBack={() => router.push("/app/register/step-4")} />
       </div>
     </div>
   );
