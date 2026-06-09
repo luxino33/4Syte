@@ -16,7 +16,8 @@
       "Bash(git push *)",
       "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__list_tables",
       "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__apply_migration",
-      "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__generate_typescript_types"
+      "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__generate_typescript_types",
+      "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__execute_sql"
     ]
   }
 }

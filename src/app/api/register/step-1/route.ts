@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { step1Schema } from "@/lib/schemas/step1";
+import { step1Schema, step1DraftSchema } from "@/lib/schemas/step1";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -7,48 +7,76 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
     const body = await req.json();
-    const { draft = false, supplierId: existingSupplierId, sessionId, ...rawData } = body;
+    const {
+      draft = false,
+      supplierId: incomingSupplierId,
+      sessionId: incomingSessionId,
+      ...rawData
+    } = body;
 
-    // Validate data (partial on draft, full on submit)
-    let data: Partial<z.infer<typeof step1Schema>>;
-    if (draft) {
-      data = step1Schema.partial().parse(rawData);
-    } else {
-      data = step1Schema.parse(rawData);
-    }
+    // Validate data — permissive draft schema vs strict submit schema
+    const data: Partial<z.infer<typeof step1Schema>> = draft
+      ? step1DraftSchema.parse(rawData)
+      : step1Schema.parse(rawData);
 
-    // ── Get or create a supplier row linked to this browser session ──────────
-    let supplierId: string = existingSupplierId;
+    // ── Resolve supplier ──────────────────────────────────────────────────────
+    // Ensure we always have a session_id (server-side fallback if client missing)
+    const sessionId: string =
+      (typeof incomingSessionId === "string" && incomingSessionId) ||
+      crypto.randomUUID();
 
-    if (!supplierId && sessionId) {
-      // Look up existing draft for this session
-      const { data: existing } = await supabase
+    let supplierId: string =
+      typeof incomingSupplierId === "string" ? incomingSupplierId : "";
+
+    // If no supplierId given, look up the most recent draft for this session
+    if (!supplierId) {
+      const { data: existing, error: lookupError } = await supabase
         .from("suppliers")
         .select("id")
         .eq("session_id", sessionId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
-      supplierId = existing?.id ?? "";
+        .maybeSingle(); // ← maybeSingle does NOT throw on 0 rows
+
+      if (lookupError) {
+        console.error("[step-1] supplier lookup failed:", lookupError);
+        return NextResponse.json(
+          { error: "Supplier lookup failed", detail: lookupError.message },
+          { status: 500 }
+        );
+      }
+      if (existing?.id) supplierId = existing.id;
     }
 
+    // If still no supplier, create one
     if (!supplierId) {
-      // Create a new supplier row for this session
-      const sid = sessionId ?? crypto.randomUUID();
-      const { data: newSupplier, error } = await supabase
+      const { data: newSupplier, error: insertError } = await supabase
         .from("suppliers")
-        .insert({ session_id: sid, status: "DRAFT", current_step: 1 })
+        .insert({ session_id: sessionId, status: "DRAFT", current_step: 1 })
         .select("id")
         .single();
 
-      if (error || !newSupplier) {
-        return NextResponse.json({ error: "Failed to create supplier record" }, { status: 500 });
+      if (insertError || !newSupplier?.id) {
+        console.error("[step-1] supplier insert failed:", insertError);
+        return NextResponse.json(
+          {
+            error: "Failed to create supplier record",
+            detail: insertError?.message,
+          },
+          { status: 500 }
+        );
       }
       supplierId = newSupplier.id;
     }
 
     // ── Upsert company_info ───────────────────────────────────────────────────
+    // Convert ISO date string ("2026-12-31") to a clean date for Postgres
+    const taxExpiry =
+      data.taxClearancePinExpiry && data.taxClearancePinExpiry.trim() !== ""
+        ? data.taxClearancePinExpiry
+        : null;
+
     const payload = {
       supplier_id: supplierId,
       submitter_full_name: data.submitterFullName ?? "",
@@ -68,7 +96,7 @@ export async function POST(req: NextRequest) {
       vat_registered: data.vatRegistered ?? false,
       vat_number: data.vatNumber || null,
       tax_clearance_pin: data.taxClearancePin || null,
-      tax_clearance_pin_expiry: data.taxClearancePinExpiry || null,
+      tax_clearance_pin_expiry: taxExpiry,
     };
 
     const { error: upsertError } = await supabase
@@ -76,19 +104,25 @@ export async function POST(req: NextRequest) {
       .upsert(payload, { onConflict: "supplier_id" });
 
     if (upsertError) {
-      console.error("[step-1] upsert error:", upsertError);
-      return NextResponse.json({ error: upsertError.message }, { status: 500 });
+      console.error("[step-1] company_info upsert failed:", upsertError);
+      return NextResponse.json(
+        { error: "Failed to save company info", detail: upsertError.message },
+        { status: 500 }
+      );
     }
 
-    // Advance wizard step if full submit
+    // Advance wizard step on full submit
     if (!draft) {
-      await supabase
+      const { error: stepError } = await supabase
         .from("suppliers")
         .update({ current_step: 2 })
         .eq("id", supplierId);
+      if (stepError) {
+        console.error("[step-1] step advance failed:", stepError);
+      }
     }
 
-    return NextResponse.json({ ok: true, supplierId });
+    return NextResponse.json({ ok: true, supplierId, sessionId });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json(
@@ -96,7 +130,11 @@ export async function POST(req: NextRequest) {
         { status: 422 }
       );
     }
-    console.error("[step-1]", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("[step-1] unhandled:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: "Internal server error", detail: message },
+      { status: 500 }
+    );
   }
 }

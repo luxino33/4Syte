@@ -34,60 +34,67 @@ export const REG_NUMBER_FORMATS = {
   OTHER: { pattern: /^.+$/, mask: "", example: "Any format" },
 } as const;
 
-export const step1Schema = z
-  .object({
-    // ── Submitter (1001–1006) ──────────────────────────────────────────────
-    submitterFullName: alphanumericMax(40).min(2, "Required"),
-    submitterRole: alphanumericMax(40).min(2, "Required"),
-    generalEmail: z
-      .string()
-      .email("Must be a valid email address")
-      .refine((v) => v.includes("@") && v.includes("."), "Must contain @ and a dot"),
-    companyPhone: z
-      .string()
-      .min(7, "Too short")
-      .max(15, "Max 15 characters")
-      .regex(phoneRegex, "Numbers, spaces, +, -, () only"),
-    companyFax: z
-      .union([
-        z.string().max(15).regex(phoneRegex, "Numbers only").optional(),
-        z.literal(""),
-      ])
-      .optional(),
-    companyWebsite: z
-      .union([z.string().url("Must be a valid URL").optional(), z.literal("")])
-      .optional(),
-    linkedIn: z.string().optional(),
-    facebook: z.string().optional(),
+// ── Shape ────────────────────────────────────────────────────────────────────
+// Defined separately so we can build both a strict (refined) schema for submit
+// and a permissive partial schema for draft saves. Calling .partial() directly
+// on a refined schema is not supported by Zod.
+const step1Shape = {
+  // ── Submitter (1001–1006) ──────────────────────────────────────────────
+  submitterFullName: alphanumericMax(40).min(2, "Required"),
+  submitterRole: alphanumericMax(40).min(2, "Required"),
+  generalEmail: z
+    .string()
+    .email("Must be a valid email address")
+    .refine((v) => v.includes("@") && v.includes("."), "Must contain @ and a dot"),
+  companyPhone: z
+    .string()
+    .min(7, "Too short")
+    .max(15, "Max 15 characters")
+    .regex(phoneRegex, "Numbers, spaces, +, -, () only"),
+  companyFax: z
+    .union([
+      z.string().max(15).regex(phoneRegex, "Numbers only").optional(),
+      z.literal(""),
+    ])
+    .optional(),
+  companyWebsite: z
+    .union([z.string().url("Must be a valid URL").optional(), z.literal("")])
+    .optional(),
+  linkedIn: z.string().optional(),
+  facebook: z.string().optional(),
 
-    // ── Company Registration (1007–1011) ───────────────────────────────────
-    registeredName: alphanumericMax(40).min(2, "Required"),
-    companyType: z.enum([
-      "PRIVATE_COMPANY",
-      "CLOSE_CORPORATION",
-      "SOLE_PROPRIETOR",
-      "PUBLIC_COMPANY",
-      "TRUST",
-      "PARTNERSHIP",
-      "NGO",
-      "OTHER",
-    ]),
-    companyTypeOther: z.string().optional(),
-    tradingName: z
-      .union([alphanumericMax(40).optional(), z.literal("")])
-      .optional(),
-    registrationNumber: z.string().min(1, "Required"),
-    holdingCompanyName: z
-      .union([alphanumericMax(40).optional(), z.literal("")])
-      .optional(),
+  // ── Company Registration (1007–1011) ───────────────────────────────────
+  registeredName: alphanumericMax(40).min(2, "Required"),
+  companyType: z.enum([
+    "PRIVATE_COMPANY",
+    "CLOSE_CORPORATION",
+    "SOLE_PROPRIETOR",
+    "PUBLIC_COMPANY",
+    "TRUST",
+    "PARTNERSHIP",
+    "NGO",
+    "OTHER",
+  ]),
+  companyTypeOther: z.string().optional(),
+  tradingName: z
+    .union([alphanumericMax(40).optional(), z.literal("")])
+    .optional(),
+  registrationNumber: z.string().min(1, "Required"),
+  holdingCompanyName: z
+    .union([alphanumericMax(40).optional(), z.literal("")])
+    .optional(),
 
-    // ── Tax (1012–1015) ────────────────────────────────────────────────────
-    vatRegistered: z.boolean().refine((v) => v !== undefined, "Please select Yes or No"),
-    vatNumber: z.string().optional(),
-    taxClearancePin: z.string().max(15).optional(),
-    taxClearancePinExpiry: z.string().optional(), // ISO date string from date picker
-  })
-  .superRefine((data, ctx) => {
+  // ── Tax (1012–1015) ────────────────────────────────────────────────────
+  vatRegistered: z.boolean(),
+  vatNumber: z.string().optional(),
+  taxClearancePin: z.string().max(15).optional(),
+  taxClearancePinExpiry: z.string().optional(), // ISO date string from date picker
+} as const;
+
+const step1BaseObject = z.object(step1Shape);
+
+// Strict schema with cross-field refinements — used on final submit.
+export const step1Schema = step1BaseObject.superRefine((data, ctx) => {
     // VAT number required if vatRegistered = true
     if (data.vatRegistered) {
       if (!data.vatNumber || data.vatNumber.trim() === "") {
@@ -144,9 +151,15 @@ export const step1Schema = z
         });
       }
     }
-  });
+});
+
+// Permissive schema used for auto-save / draft endpoints. Every field optional,
+// no cross-field rules — we just want type-safety on whatever the user has
+// entered so far.
+export const step1DraftSchema = step1BaseObject.partial();
 
 export type Step1FormData = z.infer<typeof step1Schema>;
+export type Step1DraftData = z.infer<typeof step1DraftSchema>;
 
 // Default values for the form
 export const step1Defaults: Partial<Step1FormData> = {
