@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { step1Schema } from "@/lib/schemas/step1";
 import { prisma } from "@/lib/prisma";
-import { ZodError } from "zod";
+import { z } from "zod";
 
 export async function POST(req: NextRequest) {
   try {
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (err instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", issues: err.flatten().fieldErrors },
         { status: 422 }
