@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-
   // Keep native Node modules out of the client bundle
   serverExternalPackages: [
     "bcryptjs",
