@@ -9,7 +9,14 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git config *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__list_tables",
+      "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__apply_migration",
+      "mcp__a74def83-e2cc-4410-9144-0cc92ad95e2f__generate_typescript_types"
     ]
   }
 }

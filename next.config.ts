@@ -1,22 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Standalone output — required for Hostinger Node.js hosting
   output: "standalone",
 
-  // Tell webpack/turbopack not to bundle native Node.js modules
+  // Keep native Node modules out of the client bundle
   serverExternalPackages: [
-    "@prisma/client",
-    "@prisma/adapter-pg",
-    "prisma",
-    "pg",
     "bcryptjs",
     "@anthropic-ai/sdk",
     "nodemailer",
     "pdf-lib",
   ],
 
-  // Suppress the "Image" dimension warning on the landing page
   images: {
     remotePatterns: [],
   },
